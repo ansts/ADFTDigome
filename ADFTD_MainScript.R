@@ -26,9 +26,10 @@ require(htmltools)
 require(htmlwidgets)
 require(ppcor)
 require(biomartr)
+require(easyalluvial)
 
 fxs=paste(getwd(),c("chpr1.R","mkZpepMx.R", "pepnorm.R", "ReGr.R","plotG2D.R",
-                    "plotG3D.R","rfe.R","clucri.R","clrAvg.R"),
+                    "plotG3D.R","rfe.R","clucri.R"),
           sep="/")
 sapply(fxs,source)
 
@@ -49,8 +50,8 @@ EBVepi=read.csv("EBVautoImmEp..csv")
 EBVepi=unlist(stri_extract_all(EBVepi[,1], regex="^\\w+"))
 EBVepi7=qgrams(EBVepi,q=7)[1,]
 
-load("matpep")  # 7-mer Ph.D.-7 sequences obtained after single amplification without selection from Matocko et. al.
-load("ODxs790_30.out")  # healthy donor public IgM mimotope library from Pashov et al. 2019
+load("matpep")  # 7-mer Ph.D.-7 sequences obtained after single amplification without selection 
+load("ODxs790_30.out")  # healthy donor public IgM mimotope library
 orilab=unlist(lapply(ODxs790_30.out, function(Tb){
   Tb$Alignment
 }))
@@ -718,6 +719,8 @@ axis(1, at=1:4, labels=c("C","A","F","ND"), cex.axis=0.8)
 axis(2, at=c(-0.5,0,0.5), cex.axis=0.8)
 
 
+heatmap.2()
+
 # Clustering Leiden -------------------------------------------------------
 
 clst=lapply(Gi, function(g){
@@ -1207,6 +1210,13 @@ plot(gx, layout=uL, vertex.size=0, edge.color=ecol, edge.width=3)
 gx=set_edge_attr(gx, name="ecol", value=ecol)
 write_graph(gx, format="graphml", file="gx.graphml")
 
+
+ppCMlow=unique(unlist(ppfinal[4:7]))
+ppAFG=unique(unlist(ppfinal[8:11]))
+isosw=intersect(ppCMlow,ppAFG)
+chisq.posthoc.test(table(names(idnn) %in% isosw,idnn>2), simulate.p.value=T)
+
+
 # BLAST ----
 
 getProteome(organism="9606", release=76)
@@ -1262,20 +1272,29 @@ ppf=unique(unlist(ppfinal))
 ppfbl=ppf[ppf %in% names(BLALL)]
 pptHits=lapply(ppfbl, function(p) { 
     L=BLALL[[p]]
-      X=t(sapply(L$sseqid, function(X) {
+    X=t(sapply(seq_along(L$sseqid), function(i) {
+        X=L$sseqid[i]
         x=attributes(HuProt[[X]])$Annot
-        x2=gsub("[ ]$","",gsub("\\[Homo sapiens]|>[^ ]*|\\ isoform \\w*|\\ member \\w*| precursor \\w*","",x))
-        c(X,x2)
+        x2=gsub("[ ]$","",gsub("\\[Homo sapiens]|>[^ ]*|\\ isoform \\w*|\\ member \\w*| precursor \\w*","",x))   
+        S=toupper(paste(HuProt[[X]][L$sstart[i]:L$send[i]], collapse=""))        
+        c(X,x2,S,p)
       }))
-      X=aggregate(X[,1], by=list(X[,2]), function(x) x[1])
-      return(X)
+      X=aggregate(list(X[,1]), by=list(X[,2],X[,3],X[,4]), "list")
+      colnames(X)=c("Protein","Protein Seq","Mimotope Seq", "IDs")
+      j=nchar(X$`Protein Seq`)>=6
+      return(X[j,])
 })
 names(pptHits)=ppfbl
 
-pptHits=melt(pptHits)
+x=pptHits[[1]]
+for (i in 2:length(pptHits)){
+  if (length(pptHits[[i]])>0) x=rbind(x,pptHits[[i]])
+}
+
+pptHitsall=x
 ppthitsbycl=lapply(ppfinal,function(l) {
-  x=data.frame(pptHits[pptHits$L1 %in% l,], )
-  colnames(x)=c("Protein","ID","Mimotope")
+  x=as.data.frame(pptHitsall[pptHitsall[,"Mimotope Seq"] %in% l,], )
+  x$IDs=sapply(x$IDs, function(l) paste(l,collapse="|"))
   return(x)
 })
 
@@ -1283,9 +1302,6 @@ ppthitsbycl=lapply(ppfinal,function(l) {
 ppthitsbycl=melt(ppthitsbycl)
 write.table(ppthitsbycl,file="ppHits_bycl.txt")
 
-pptHits=aggregate(pptHits$L1, by=list(pptHits$value), "list")
-nm=pptHits$x
-pptHits=pptHits$Group.1; names(pptHits)=nm
 
 
 tx=rbind(c(length(BLALL),length(pp)-length(BLALL)),
@@ -1298,7 +1314,6 @@ chisq.test(table(idnn>0,pp %in% ppfinal_u))
 zfngrHits=length(grep("zinc finger",pptHits))
 zfngrHits/length(pptHits)
 
-write.table(pptHits, file="ppHits.txt")
 
 ppfinal_tu=sapply(ppf, function(cl) ppf %in% cl)
 colnames(ppfinal_tu)=sub("\\&"," ",colnames(ppfinal_tu))
@@ -1308,4 +1323,24 @@ plot(vnn, quantities=T)
 
 mean(aggregate(pptHits$Group.1, by=list(pptHits$L1), "length")[,2])
 
+ppthitsbyclbyprot=aggregate(ppthitsbycl$L1, by=list(ppthitsbycl$Protein), "list")
+
+
+justpphits=unique(ppthitsbycl$`Mimotope Seq`)
+
+
+MM=DnGM$IgM[justpphits,]; MG=DnGM$IgG[justpphits,]
+Mx=t(cbind(scale(t(MM)),scale(t(MG))))
+
+plot3d(cmdscale(dist(t(DnGM$IgG[dd,])),k=3), col=diall, size=10)
+rownames(Mx)=paste(rownames(Mx), rep(c("M","G"),each=length(justpphits)), sep="_")
+dd=rownames(rfe(Mx, as.factor(diall))[[1]])
+dd=rownames(rfe(Mx[,diall %in% c(1,3)], as.factor(diall[diall %in% c(1,3)]))[[1]])
+ddneat=cbind(unlist(stri_extract_all(dd, regex="\\w+(?=_)")),dd)
+plot3d(cmdscale(dist(t(Mx[dd,])),k=3), col=diall, size=10, xlab="D1", ylab="D2", zlab = "D3")
+
+plot3d(cmdscale(dist(t(Mx[dd,])),k=3), col=diall, size=10, xlab="D1", ylab="D2", zlab = "D3")
+plot(cmdscale(dist(t(Mx[dd,])),k=2), pch=16, col=diall, cex=2, xlab="D1", ylab="D2")
+
+write.csv(ddneat, file="ddneat.csv")
 
