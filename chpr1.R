@@ -60,6 +60,7 @@ chpr1=function(p, sh=FALSE, bgcode="ps", cntr=c("G","YPYDVPDYAG","KEVPALTAVETGAT
   if (all(unlist(lapply(coor, function(x){unlist(coor[[1]][5:6])==unlist(x[5:6])})))) print("Ordered, homogeneous Sets") else return("Error: Nonhomogeneous Sets!")
   fl=lapply(bl,function(i){i[[4]][,5]})
   ID0=lapply(bl,function(i){i[[4]][,3]})
+  #print("!")
   if( all(rowAlls(sapply(ID0, function(x) ID0[[1]]==x)))) ID0=ID0[[1]]
 
   pt=lapply(bl,function(i){as.character(i[[1]])})   #as.character(i[[3]])
@@ -105,43 +106,8 @@ chpr1=function(p, sh=FALSE, bgcode="ps", cntr=c("G","YPYDVPDYAG","KEVPALTAVETGAT
   B0xy=B0[[1]][[2]]
   B1=sapply(B0, function(l){l[[1]]})
 
-  # R1=sapply(seq_along(R0[1,]),function(i){
-  #     S=R0[,i]; B=B1[,i]
-  #     abZ=lm(S~B)
-  #     j=cut(B,10,labels=F)
-  #     bi=aggregate(B, by=list(j), "mean")
-  #     z=abZ$residuals
-  #     sdZ=sapply(1:10, function(i) x=sd(z[j==i]))
-  #     zz=lm(log10(sdZ)~log10(bi$x))
-  #     a=zz$coefficients[2]
-  #     b=zz$coefficients[1]
-  #     sdf=10^b*B^a
-  #     msdf=10^(mean(log10(sdf)))
-  #     res=msdf*z/sdf
-  #     return(res-min(res)+1)
-  # })
-  #colnames(R1)=colnames(R0)
   res=backgroundCorrect.matrix(R0,B1, method = "normexp", normexp.method = "mle")
-  res=sapply(seq_along(R0[1,]),function(i){
-    S=R0[,i]; B=B1[,i]
-    Sr=S
-    abZ=lm(Sr~B)
-    j=cut(B,20,labels=F)
-    bi=aggregate(B, by=list(j), "mean")
-    z=abZ$residuals
-    sdZ=sapply(sort(unique(j)), function(i) sd(z[j==i]))
-    zz=lm(log10(sdZ)~log10(bi$x))
-    a=zz$coefficients[2]
-    b=zz$coefficients[1]
-    sdf=(10^b)*(B^a)
-    Sr=abZ$coefficients[2]*B+abZ$coefficients[1]+mean(abs(z))*z/sdf
-    S=Sr
-    x=backgroundCorrect.matrix(S, B, method="normexp", normexp.method="mle")
-      plotarray(coor[[1]]$Row,coor[[1]]$Column,R0[,i], nm=flsR0[i])
-      plotarray(coor[[1]]$Row,coor[[1]]$Column,x, nm="")
-    return(x)
-  })
-  colnames(res)=colnames(R0)
+  
   return(list(coor,ID0,res,fl))
 }
 
