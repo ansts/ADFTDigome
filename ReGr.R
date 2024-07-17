@@ -12,6 +12,7 @@ ReGr=function(D, thr=0.08){
   require(stringi)
 
   # Adjacency Matrix --------------------------------------------------------
+  
   nc=14
   pep=rownames(D)
   Ds=D-min(D)+abs(min(D))/100                         

@@ -5,6 +5,7 @@ bgmy=function(IM,ID){
   cpl=colorRampPalette(c("#001030","#0050AA","#10AA10","#FFFF00","#FFA000","#B50000"))
   img=acast(IM, names(IM)[1]~names(IM)[2], value.var = names(IM)[3])
   
+  
   nr=nrow(img)
   nc=ncol(img)
   id=unique(ID)

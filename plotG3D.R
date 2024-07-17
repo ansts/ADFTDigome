@@ -7,7 +7,7 @@ plotG3D=function(G, att="C", atfl=T, e_att=NULL, extatt=NULL, omit=NULL, grclr=F
   
   grclrs=colorRampPalette(c("black", gray(0.2,0), gray(0.6,0), gray(0.8,0),"white"))
   cpl=colorRampPalette(c("#000000","#0050AA9F","#10AA109F","#FFFF009F","#FFA0009F","#B50000"), alpha=T)
-  
+   
   if (grclr) clrplt=grclrs else clrplt=cpl
   
   cpl4=c("#B5000090","#80808090","#10AA1090","#0020FF90")

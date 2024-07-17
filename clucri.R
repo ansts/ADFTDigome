@@ -5,6 +5,7 @@
 # and to restrict them in the range between -1 and 1. The conversion functions dunnfix, connfix and bhgamfix 
 # are vectorized for faster calculations.
 
+
 clucri=function(m0,c){
   require(clValid)
   require(cluster)

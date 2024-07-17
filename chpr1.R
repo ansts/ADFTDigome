@@ -105,7 +105,20 @@ chpr1=function(p, sh=FALSE, bgcode="ps", cntr=c("G","YPYDVPDYAG","KEVPALTAVETGAT
   
   B0xy=B0[[1]][[2]]
   B1=sapply(B0, function(l){l[[1]]})
-
+  res=sapply(seq_along(R0[1,]),function(i){
+    S=R0[,i]; B=B1[,i]
+    Sr=S
+    abZ=lm(Sr~B)
+    j=cut(B,20,labels=F)
+    bi=aggregate(B, by=list(j), "mean")
+    z=abZ$residuals
+    sdZ=sapply(sort(unique(j)), function(i) sd(z[j==i]))
+    zz=lm(log10(sdZ)~log10(bi$x))
+    a=zz$coefficients[2]
+    b=zz$coefficients[1]
+    sdf=(10^b)*(B^a)
+    Sr=abZ$coefficients[2]*B+abZ$coefficients[1]+mean(abs(z))*z/sdf
+    S=Sr
   res=backgroundCorrect.matrix(R0,B1, method = "normexp", normexp.method = "mle")
   
   return(list(coor,ID0,res,fl))

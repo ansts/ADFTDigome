@@ -28,7 +28,7 @@ require(ppcor)
 require(biomartr)
 require(easyalluvial)
 
-fxs=paste(getwd(),c("chpr1.R","mkZpepMx.R", "pepnorm.R", "ReGr.R","plotG2D.R",
+fxs=paste(getwd(),c("chpr1.R", "bgmy.R","mkZpepMx.R", "pepnorm.R", "ReGr.R","plotG2D.R",
                     "plotG3D.R","rfe.R","clucri.R"),
           sep="/")
 sapply(fxs,source)
@@ -71,7 +71,7 @@ pat=rep(c("1.6","1.6","1.6","1.3","2.7","2.7","2.7","2.6","3.8","3.8","3.8","3.4
 lf=list.files(path = pth)
 PrePost=c(rep("post",20),rep("pre",20))
 fnms=lf
-key=data.frame(file=fnms,pat=pat,block=3,diag=dgn,PrePost=PrePost,ch="both")
+key=data.frame(file=fnms,pat=pat,block=1,diag=dgn,PrePost=PrePost,ch="both")
 write.csv(key, file=paste(pth,"key.csv", sep=""))
 
 blgr=read.csv(file="blGr1.csv")

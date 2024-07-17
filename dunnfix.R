@@ -11,6 +11,7 @@ dunnfix=function(x,i){
   a4= 6.110248e-15
   a5= -4.700154e-19
  
+  
   y=x-(i*a_1/(i+b_1)+i*a_2)
   y=y/(a5*i^5+a4*i^4+a3*i^3+a2*i^2+a1*i+a0)           
   return(y)

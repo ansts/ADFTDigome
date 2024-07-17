@@ -2,6 +2,7 @@ plotG2D=function(G, att="K", e_att=NULL, omit=NULL, coff=NULL, seed=888888, norm
   require(igraph)
   require(rgl)
   require(uwot)
+  
   cpl=colorRampPalette(c("#000000","#0050AA9F","#10AA109F","#FFFF009F","#FFA0009F","#B50000"), alpha=T)
   cm=components(G)
   G=induced.subgraph(G, V(G)[cm$membership==as.numeric(names(table(cm$membership)))[which.max(table(cm$membership))]])
