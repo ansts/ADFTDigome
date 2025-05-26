@@ -27,6 +27,7 @@ require(htmlwidgets)
 require(ppcor)
 require(biomartr)
 require(easyalluvial)
+require(e1071)
 
 fxs=paste(getwd(),c("chpr1.R", "bgmy.R","mkZpepMx.R", "pepnorm.R", "ReGr.R","plotG2D.R",
                     "plotG3D.R","rfe.R","clucri.R"),
@@ -177,42 +178,6 @@ pdf(file="rawdata.pdf", width=10,height=10)
   pairs(DnGM$IgG, cex=0.05,col=rgb(0,0,0,0.2), main="IgG", xlim=rG, ylim=rG)
 dev.off()
 
-# Correlations between diagnosis means -----
-
-diaMeans=lapply(nms, function(iso){
-  mns=rowmeans(DnGM[[iso]])
-  X=lm(DnGM[[iso]]~rowMeans(DnGM[[iso]]))
-  t(apply(X$residuals,1,function(l){
-    x=aggregate(l, by=list(diapat$dia), "mean")
-    n=x$Group.1; x=x$x; names(x)=n
-    return(x)
-  }))
-})
-
-# diaMeans=lapply(nms, function(iso){
-#   t(apply(DnGM[[iso]],1,function(l){
-#     x=aggregate(l, by=list(diapat$dia), "mean")
-#     n=x$Group.1; x=x$x; names(x)=n
-#     return(x)
-#   }))
-# })
-
-names(diaMeans)=nms
-
-cpl2=colorRampPalette(c("#000000","#0050AA9F","#FFFFFF","#FFA0009F","#B50000"), alpha=T)
-diaMnside=cbind(diaMeans[[1]][pp,], diaMeans[[2]][pp,],idnn[pp], blAB$IgM[pp,1],blAB$IgM[pp,2],blAB$IgG[pp,1],blAB$IgG[pp,2])
-colnames(diaMnside)=c(paste(colnames(diaMnside)[1:8],c(rep("IgM",4),rep("IgG",4)), sep=":"),"Id NN", 
-                      "BlGr A/M", "BlGr B/M","BlGr A/G", "BlGr B/G")
-corrplot(pcor(diaMnside)$estimate, method="color", order="hclust",hclust.method = "ward.D2", col=cpl2(15), diag=F)
-corrplot(pcor(diaMnside)$estimate, method="color", order="hclust",hclust.method = "ward.D2", col=cpl2(15), diag=F)
-
-##### Fig -----
-X=cor(diaMnside)
-# X=X$estimate
-# colnames(X)=colnames(diaMnside)
-# rownames(X)=colnames(diaMnside)
-corrplot(X, method="color", order="hclust",hclust.method = "ward.D2", col=cpl2(15), diag=F)
-heatmap.2(X, hclustfun = function(d) hclust(d, method="ward.D2"), col=cpl2(15), trace="none")
 
 # PCA -------------------------------------------------------------------
 
@@ -680,6 +645,25 @@ names(WRSTidnnBS)=nms
 WidBS=lapply(WRSTidnnBS, function(Tz){
   t(array(Tz, dim=c(2,4*100)))
 })
+
+
+# Embedding ---------------------------------------------------------
+## Fig embed -----------------------------------
+png(file="graphEmbeddings_clrblnd.png", width=50,height = 90, units = "in", res=75)
+par(mfrow=c(5,2))
+par(mai=c(0.1,0.1,0.1,0.1))
+plotG2D(Gi$IgM, att="C", coff=4)
+plotG2D(Gi$IgG, att="C", coff=5)
+plotG2D(Gi$IgM, att="A", coff=4)
+plotG2D(Gi$IgG, att="A", coff=5)
+plotG2D(Gi$IgM, att="F", coff=4)
+plotG2D(Gi$IgG, att="F", coff=5)
+plotG2D(Gi$IgM, att="ND", coff=4)
+plotG2D(Gi$IgG, att="ND", coff=5)
+plotG2D(Gi$IgM, att="idnn", coff=4)
+plotG2D(Gi$IgG, att="idnn", coff=5)
+dev.off()
+
 
 ## Fig Idiotypy --------
 
@@ -1343,4 +1327,112 @@ plot3d(cmdscale(dist(t(Mx[dd,])),k=3), col=diall, size=10, xlab="D1", ylab="D2",
 plot(cmdscale(dist(t(Mx[dd,])),k=2), pch=16, col=diall, cex=2, xlab="D1", ylab="D2")
 
 write.csv(ddneat, file="ddneat.csv")
+
+# Machine learning model ------------------------------------------------------
+
+ix=c(1,1,1,1,2,2,2,2,3,3,3,1,3,1,1,2,2,2,2,1) # indexing uncorrelated samples per diagnosis 
+diapat[order(diapat$dia,ix),]
+diapat=cbind(diapat, uix=ix)
+ix=aggregate(seq_along(diapat[,1]), by=diapat[,c(2,9)], unique)
+
+
+n="IgM";dia="A"
+Ds=c("A","F","ND","C")
+Mx1=DnGM$IgM
+
+# filtering first PC to remove overall correlation
+pMx1=PCA(Mx1,ncp=1)
+Mx1=lm(Mx1~pMx1$ind$coord)$residuals
+Mx2=DnGM$IgG
+pMx2=PCA(Mx2,ncp=1)
+Mx2=lm(Mx2~pMx2$ind$coord)$residuals
+
+# joined data 
+Mx=rbind(Mx1,Mx2)
+rownames(Mx)=paste(rep(rownames(Mx1),2), rep(c("_m","_g"), each=nrow(Mx1)), sep="")
+
+# Cross validation leaving out smallest groups of correlated samples
+plan(multisession, workers=11)
+L1outM=lapply(list(c("A","F"),c("A","C"),c("F","C")), \(si){
+  t(future_sapply(1:11, \(i){
+    io=ix$x[[i]]
+    d0=(dia[-io] %in% si)*1+1
+    M=Mx1[,-io]
+    r=mahala(M,colMeans(M),cov(M))
+    rthr=quantile(r, .35)
+    X0=Mx1[r>rthr,]
+    ffset=rownames(rfe(X0[,-io], as.factor(d0))[[1]])
+    X0=X0[ffset,]
+    X=PCA(t(X0),6)$ind$coord
+    mdl=svm(X[-io,],as.factor(d0),scale=F,gamma=0.05, C=10, probability=T)
+    # pdf(file=paste(c(si,io,"_M.pdf"),collapse="", sep=""), width=8.8, height=8)
+    #   svmplot(X0,io,(dia %in% si)*1+1,dia)
+    # dev.off()  
+    z=predict(mdl,newdata=X, probability=T)
+    TF=(z[io]==((dia[io] %in% si)*1+1))
+    return(list(TF,ffset))
+  }))
+})
+plan(sequential)
+
+accM=sapply(L1outM, \(L){
+  tx=table(unlist(L[,1]))
+  tx["TRUE"]/sum(tx)
+})
+names(accM)=c("AF","AC","FC")
+
+plan(multisession, workers=11)
+L1outG=lapply(list(c("A","F"),c("A","C"),c("F","C")), \(si){
+  t(future_sapply(1:11, \(i){
+    io=ix$x[[i]]
+    d0=(dia[-io] %in% si)*1+1
+    M=Mx2[,-io]
+    r=mahala(M,colMeans(M),cov(M))
+    rthr=quantile(r, .35)
+    X0=Mx2[r>rthr,]
+    ffset=rownames(rfe(X0[,-io], as.factor(d0))[[1]])
+    X=X0[ffset,]
+    X=PCA(t(X),6)$ind$coord
+    mdl=svm(X[-io,],as.factor(d0),scale=F,gamma=0.15, C=10, probability=T)
+    # svmplot(X0,io,(dia %in% si)*1+1,dia)
+    z=predict(mdl,newdata=X, probability=T)
+    TF=(z[io]==((dia[io] %in% si)*1+1))
+    return(list(TF,ffset))
+  }))
+})
+plan(sequential)
+
+accG=sapply(L1outG, \(L){
+  tx=table(unlist(L[,1]))
+  tx["TRUE"]/sum(tx)
+})
+names(accG)=c("AF","AC","FC")
+
+
+plan(multisession, workers=11)
+L1outMG=lapply(list(c("A","F"),c("A","C"),c("F","C")), \(si){
+  t(future_sapply(1:11, \(i){
+    io=c(ix$x[[i]])
+    d0=(dia[-io] %in% si)*1+1
+    M=Mx[,-io]
+    r=mahala(M,colMeans(M),cov(M))
+    rthr=quantile(r, .35)
+    X0=Mx[r>rthr,]
+    ffset=rownames(rfe(X0[,-io], as.factor(d0))[[1]])
+    X0=X0[ffset,]
+    X=PCA(t(X0),6)$ind$coord
+    mdl=svm(X[-io,],as.factor(d0),scale=F,gamma=.15, C=10, probability=T)
+    # svmplot(X0,io,dia)
+    z=predict(mdl,newdata=X, probability=T)
+    TF=(z[io]==((dia[io] %in% si)*1+1))
+    return(list(TF,ffset))
+  }))
+})
+plan(sequential)
+
+accMG=sapply(L1outMG, \(L){
+  tx=table(unlist(L[,1]))
+  tx["TRUE"]/sum(tx)
+})
+names(accMG)=c("AF","AC","FC")
 
